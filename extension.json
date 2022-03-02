@@ -89,6 +89,8 @@
         "assets/flowthread.css"
       ],
       "messages": [
+        "flowthread-ui-header",
+        "flowthread-ui-footer",
         "flowthread-ui-reply",
         "flowthread-ui-like",
         "flowthread-ui-report",
@@ -123,6 +125,8 @@
         "assets/manage.css"
       ],
       "messages": [
+        "flowthread-ui-header",
+        "flowthread-ui-footer",
         "flowthread-ui-reply",
         "flowthread-ui-like",
         "flowthread-ui-report",
