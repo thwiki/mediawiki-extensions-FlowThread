@@ -4,6 +4,18 @@ var ownpage = mw.config.exists('commentadmin') || mw.config.get('wgNamespaceNumb
 var commentContainerTop = $('<div class="comment-container-top" disabled></div>');
 var commentContainer = $('<div class="comment-container"></div>');
 
+function getExtraThreadContent(name) {
+  var msg = mw.message('flowthread-ui-' + name);
+  if (!msg.exists() || msg.plain() === '') return '';
+  var text = msg.escaped();
+  return text.replace(
+    /^(={1,6})(.+)\1\s*$/m,
+    function (a,b,c) {
+      return '<h'+b.length+'>'+c+'</h'+b.length+'>'
+    }
+  );
+}
+
 function createThread(post) {
   var thread = new Thread();
   var object = thread.object;
@@ -152,12 +164,16 @@ Paginator.prototype.repaint = function() {
 var pager = new Paginator();
 
 $(document).ready(() => {
-  $('#bodyContent').after($('<div class="post-content" id="flowthread"></div>').append(commentContainerTop, commentContainer, pager.object, function () {
-    if (canpost) return createReplyBox(null);
-    var noticeContainer = $('<div>').addClass('comment-bannotice');
-    noticeContainer.html(config.CantPostNotice);
-    return noticeContainer;
-  }()))
+  $('#bodyContent').after(
+    getExtraThreadContent('header'),
+    $('<div class="post-content" id="flowthread"></div>').append(commentContainerTop, commentContainer, pager.object, function () {
+      if (canpost) return createReplyBox(null);
+      var noticeContainer = $('<div>').addClass('comment-bannotice');
+      noticeContainer.html(config.CantPostNotice);
+      return noticeContainer;
+    }()),
+    getExtraThreadContent('footer')
+  )
 });
 
 if (mw.util.getParamValue('flowthread-page')) {
