@@ -106,11 +106,11 @@ class Hooks {
 	}
 
 	public static function onSkinTemplateNavigation_Universal(\SkinTemplate $skinTemplate, array &$links) {
-		$commentAdmin = self::getPermissionManager()->userHasRight($skinTemplate->getUser(), 'commentadmin-restricted');
-		$user = $skinTemplate->getRelevantUser();
+		$user = $skinTemplate->getUser();
+		$commentAdmin = self::getPermissionManager()->userHasRight($user, 'commentadmin-restricted');
 
 		$title = $skinTemplate->getRelevantTitle();
-		if (Helper::canEverPostOnTitle($title) && ($commentAdmin || Post::userOwnsPage($skinTemplate->getUser(), $title))) {
+		if (Helper::canEverPostOnTitle($title) && ($commentAdmin || Post::userOwnsPage($user, $title))) {
 			// add a new action
 			$links['actions']['flowthreadcontrol'] = [
 				'id' => 'ca-flowthreadcontrol',
