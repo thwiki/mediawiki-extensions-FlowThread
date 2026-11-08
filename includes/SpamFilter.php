@@ -8,6 +8,15 @@ use Wikimedia\AtEase\AtEase;
 class SpamFilter {
 
 	/**
+	 * Baidu API
+	 */
+	private const BAIDU_API_URL = 'https://aip.baidubce.com/rest/2.0/solution/v1/text_censor/v2/user_defined';
+	/**
+	 * Baidu access token API
+	 */
+    private const BAIDU_ACCESS_TOKEN_URL = 'https://aip.baidubce.com/oauth/2.0/token';
+
+	/**
 	 * Validate if a regular expression is valid
 	 */
 	private static function validateRegex($regex) {
@@ -141,7 +150,165 @@ class SpamFilter {
 		);
 	}
 
-	public static function validate($text, $poster, $wikitext) {
+	/**
+	 * Get baidu access token
+	 */
+	private static function getBaiduAccessToken($refresh = false) {
+		global $wgFlowThreadConfig;
+		$cache = MediaWikiServices::getInstance()->getMainWANObjectCache();
+		
+		$apiKey = $wgFlowThreadConfig['BaiduApiKey'];
+		$secretKey = $wgFlowThreadConfig['BaiduSecretKey'];
+		$tokenExpire = $wgFlowThreadConfig['BaiduAccessTokenExpire'];
+
+		$res =  $cache->getWithSetCallback(
+			ObjectCache::getLocalClusterInstance()->makeKey('flowthread', 'baidu_accesstoken'),
+			$tokenExpire,
+			function () use ($apiKey, $secretKey) {
+				if(!$apiKey || !$secretKey) {
+					return null;
+				}
+
+				$url = self::BAIDU_ACCESS_TOKEN_URL . '?grant_type=client_credentials&client_id=' . urlencode($apiKey) . '&client_secret=' . urlencode($secretKey);
+				self::debug('百度AI获取access_token:' . $url);
+				$curl = curl_init();
+        		curl_setopt_array($curl, array(
+            		CURLOPT_URL => $url,
+            		CURLOPT_TIMEOUT => 30,
+            		CURLOPT_RETURNTRANSFER => true,
+            		CURLOPT_SSL_VERIFYPEER  => false,
+            		CURLOPT_SSL_VERIFYHOST  => false,
+            		CURLOPT_CUSTOMREQUEST => 'POST',
+            		CURLOPT_HTTPHEADER => array(
+                		'Content-Type: application/json',
+                		'Accept: application/json'
+            		),
+        		));
+				curl_setopt($curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+				$response = curl_exec($curl);
+				$httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+				$curlError = curl_error($curl);
+        		curl_close($curl);
+
+				if($curlError) {
+					self::debug('获取百度AccessToken请求失败: ' . $curlError);
+					return null;
+				}
+
+				if ($httpCode != 200) {
+					self::debug('获取百度AccessTokenHTTP错误: ' . $httpCode);
+            		return null;
+        		}
+
+				if ($response) {
+					self::debug('获取百度access_token' . $response);
+					$data = json_decode($response, true);
+                    if (isset($data['access_token'])) {
+                        return $data['access_token'];
+                    }
+				}
+				self::debug('获取百度access_token失败');
+
+				return null;
+			}
+		);
+		if(!$res && !$refresh) {
+			// clear cache
+			$cache->delete(ObjectCache::getLocalClusterInstance()->makeKey('flowthread', 'baidu_accesstoken'));
+			return self::getBaiduAccessToken(true);
+		}
+		else {
+			return $res;
+		}
+	}
+
+	/**
+	 * Check Text with baidu
+	 * 
+	 * @param string $text
+	 * @return bool return spam result. true: spam, false: not spam
+	 */
+	private static function checkWithBaidu($text, $poster, $ip) {
+		global $wgFlowThreadConfig;
+		$ErrorDefault = isset($wgFlowThreadConfig['BaiduErrorDefault']) ? $wgFlowThreadConfig['BaiduErrorDefault'] : true;
+		$BaiduCheckLevel = $wgFlowThreadConfig['BaiduCheckLevel'];
+		// if not use baidu check (not include 1 and 2)
+		if ($BaiduCheckLevel < 1) {
+			self::debug('百度审核等级：' . $BaiduCheckLevel);
+			return false;
+		}
+		$accessToken = self::getBaiduAccessToken();
+		if (!$accessToken) {
+			$cache = MediaWikiServices::getInstance()->getMainWANObjectCache();
+			// clear cache
+			$cache->delete(ObjectCache::getLocalClusterInstance()->makeKey('flowthread', 'baidu_accesstoken'));
+			self::debug('百度AccessToken：' . $accessToken);
+			return false;
+		}
+
+		$url = self::BAIDU_API_URL . '?access_token=' . urlencode($accessToken);
+
+		$postData = array(
+            'text' => $text,
+			'userId' => $poster->getName(),
+			'userIp' => $ip
+        );
+		$curl = curl_init();
+		curl_setopt_array($curl, array(
+            CURLOPT_URL => $url,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER  => false,
+            CURLOPT_SSL_VERIFYHOST  => false,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            
+            CURLOPT_POSTFIELDS => http_build_query($postData),
+    
+            CURLOPT_HTTPHEADER => array(
+                'Content-Type: application/x-www-form-urlencoded',
+                'Accept: application/json'
+            ),
+
+        ));
+		curl_setopt($curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+        $response = curl_exec($curl);
+		$httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+		$curlError = curl_error($curl);
+        curl_close($curl);
+
+		if($curlError) {
+			self::debug('百度内容审核请求失败: ' . $curlError);
+			return $ErrorDefault;
+		}
+
+		if ($httpCode != 200) {
+			self::debug('百度内容审核HTTP错误: ' . $httpCode);
+            return $ErrorDefault; // HTTP错误，允许通过
+        }
+
+		$result = json_decode($response, true);
+		if (!$result) {
+			self::debug('百度内容审核响应解析失败');
+            return $ErrorDefault; // 解析失败，允许通过
+        }
+
+		if (isset($result['conclusionType'])) {
+			$conclusionType = $result['conclusionType'];
+			if($conclusionType == 1){
+				return false;
+			}
+			// if conclusionType is 3 and BaiduCheckLevel is 2, return true
+			if($conclusionType == 3 && $BaiduCheckLevel == 2){
+				return false;
+			}
+			self::debug('百度内容审核结果: ' . $conclusionType);
+			return true;
+		}
+
+		return $ErrorDefault;
+	}
+
+	public static function validate($text, $poster, $wikitext, $ip) {
 		$blacklist = self::getBlackList();
 		$spammed = false;
 		$ret = array(
@@ -181,6 +348,11 @@ class SpamFilter {
 				$ret['good'] = false;
 			}
 		}
+		if($ret['good']) {
+			$spammed = self::checkWithBaidu($text, $poster, $ip);
+			self::debug($spammed ? '百度内容审核结果: true' : '百度内容审核结果: false');
+			$ret['good'] = !$spammed;
+		}
 
 		$ret['text'] = $text;
 		return $ret;
@@ -188,5 +360,16 @@ class SpamFilter {
 
 	public static function sanitize($html) {
 		return preg_replace('/position(?:\/\*[^*]*\*+([^\/*][^*]*\*+)*\/|\s)*:(?:\/\*[^*]*\*+([^\/*][^*]*\*+)*\/|\s)*fixed/i', '', $html);
+	}
+
+	private static function debug($text) {
+		$file = false;
+		if ($file) {
+			$text = '[' . date('Y-m-d H:i:s') . '] ' . $text;
+			file_put_contents(dirname(__FILE__) . '/spamfilter.log', $text . "\n", FILE_APPEND);
+		}
+		else {
+			wfDebugLog('FlowThread', $text);
+		}
 	}
 }

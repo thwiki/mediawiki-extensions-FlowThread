@@ -345,7 +345,7 @@ class API extends ApiBase {
 
 				// Need to feed this to spam filter
 				$useWikitext = $this->getMain()->getCheck('wikitext');
-				$filterResult = SpamFilter::validate($text, $this->getUser(), $useWikitext);
+				$filterResult = SpamFilter::validate($text, $this->getUser(), $useWikitext, $this->getRequest()->getIP());
 				$text = $filterResult['text'];
 
 				// We need to do this step, as we might need to transform
