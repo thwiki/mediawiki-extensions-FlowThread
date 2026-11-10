@@ -12,7 +12,13 @@ class EchoPresentationModel extends EchoEventPresentationModel {
 	protected function load() {
 		if ($this->post === false) {
 			try {
-				$this->post = Post::newFromId(UID::fromBin($this->event->getExtraParam('postid')));
+				// [THBWiki F-22] Echo 1.46 用 JsonCodec 序列化 extra，二进制 postid 会触发
+				// "Malformed UTF-8"；新事件写 hex，这里兼容旧的二进制值。
+				$rawPostId = $this->event->getExtraParam('postid');
+				$postUid = (is_string($rawPostId) && strlen($rawPostId) === 32 && ctype_xdigit($rawPostId))
+					? UID::fromHex($rawPostId)
+					: UID::fromBin($rawPostId);
+				$this->post = Post::newFromId($postUid);
 			} catch (Exception $e) {
 				$this->post = null;
 			}

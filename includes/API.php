@@ -374,7 +374,8 @@ class API extends ApiBase {
 
 				$text = $parser->preSaveTransform($text, $title, $this->getUser(), $opt);
 				$output = $parser->parse($text, $title, $opt);
-				$text = $output->getText(['enableSectionEditLinks' => false]); // Edit button will not work!
+				// [THBWiki F-20] MediaWiki 1.46 移除了 ParserOutput::getText()
+				$text = $output->getContentHolderText(); // Edit button will not work!
 
 				// Get all mentioned user
 				$mentioned = Helper::generateMentionedList($output, $postObject);

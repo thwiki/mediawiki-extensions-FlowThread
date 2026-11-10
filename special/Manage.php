@@ -95,7 +95,8 @@ class SpecialManage extends SpecialPage {
 		$html .= Xml::tags('p', null, $this->getFilterLinks($this->filter));
 
 		// Submit button
-		$html .= Xml::submitButton($this->msg('allpagessubmit')->text());
+		// [THBWiki F-19] MediaWiki 1.46 移除了 Xml::submitButton，改用 Html
+		$html .= Html::submitButton($this->msg('allpagessubmit')->text());
 
 		// Fieldset
 		$html = Xml::fieldset($this->msg('flowthreadmanage')->text(), $html);
@@ -111,6 +112,16 @@ class SpecialManage extends SpecialPage {
 		}
 
 		$this->getOutput()->addHTML($html);
+	}
+
+	// [THBWiki F-19] MediaWiki 1.46 移除了 Xml::inputLabel，这里用 Html 重建等价输出
+	private function inputLabel($label, $name, $id, $size, $value, $attribs = array()) {
+		$attribs['size'] = $size;
+		if ($id !== '' && $id !== null) {
+			$attribs['id'] = $id;
+		}
+		return Html::rawElement('label', $id ? array('for' => $id) : array(), $label)
+			. ' ' . Html::input($name, $value, 'text', $attribs);
 	}
 
 	private function getPossibleFilters() {
@@ -143,7 +154,7 @@ class SpecialManage extends SpecialPage {
 	}
 
 	private function getUserInput($user) {
-		$label = Xml::inputLabel(
+		$label = $this->inputLabel(
 			$this->msg('flowthreadmanage-user')->text(),
 			'user',
 			'',
@@ -156,7 +167,7 @@ class SpecialManage extends SpecialPage {
 	}
 
 	private function getTitleInput($title) {
-		$label = Xml::inputLabel(
+		$label = $this->inputLabel(
 			$this->msg('flowthreadmanage-title')->text(),
 			'page',
 			'',
@@ -168,7 +179,7 @@ class SpecialManage extends SpecialPage {
 	}
 
 	private function getKeywordInput($keyword) {
-		$label = Xml::inputLabel(
+		$label = $this->inputLabel(
 			$this->msg('flowthreadmanage-keyword')->text(),
 			'keyword',
 			'',

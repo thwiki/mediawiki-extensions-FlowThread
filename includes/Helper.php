@@ -3,6 +3,7 @@ namespace FlowThread;
 
 use MediaWiki\MediaWikiServices;
 use MediaWiki\Parser\ParserOutput;
+use MediaWiki\Parser\ParserOutputLinkTypes;
 use MediaWiki\Title\Title;
 use MediaWiki\User\User;
 use Wikimedia\Rdbms\DBConnRef;
@@ -113,7 +114,11 @@ class Helper {
 	public static function generateMentionedList(\ParserOutput $output, Post $post) {
 		$pageTitle = Title::newFromId($post->pageid);
 		$mentioned = array();
-		$links = $output->getLinks();
+		// [THBWiki F-21] MediaWiki 1.46 移除了 ParserOutput::getLinks()，改用 getLinkList()
+		$links = array( NS_USER => array() );
+		foreach ( $output->getLinkList( ParserOutputLinkTypes::LOCAL, NS_USER ) as $linkInfo ) {
+			$links[NS_USER][$linkInfo['link']->getDBkey()] = $linkInfo['pageid'] ?? 0;
+		}
 		if (isset($links[NS_USER]) && is_array($links[NS_USER])) {
 			foreach ($links[NS_USER] as $titleName => $pageId) {
 				$user = MediaWikiServices::getInstance()->getUserFactory()->newFromName($titleName);
