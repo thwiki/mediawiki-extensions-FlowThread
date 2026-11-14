@@ -164,7 +164,7 @@ Paginator.prototype.repaint = function() {
 var pager = new Paginator();
 
 $(document).ready(() => {
-  $('#bodyContent').after(
+  var nodes = [
     getExtraThreadContent('header'),
     $('<div class="post-content" id="flowthread"></div>').append(commentContainerTop, commentContainer, pager.object, function () {
       if (canpost) return createReplyBox(null);
@@ -173,7 +173,19 @@ $(document).ready(() => {
       return noticeContainer;
     }()),
     getExtraThreadContent('footer')
-  )
+  ];
+
+  // [THBWiki] Citizen 的 .citizen-body-container 是具名网格
+  // （grid-template-areas: "content aside" / "footer footer"），
+  // 插在 #bodyContent 之后的节点会成为未定位的网格项：被塞进 aside 列、
+  // 且落在 footer 的隐式行之后，表现为宽屏评论挤到右侧、页脚跑到评论上方。
+  // 这类皮肤把评论区放进内容容器内部；其余皮肤保持原有 DOM 结构，
+  // 避免评论区被 .mw-body-content 的字号/列表样式影响。
+  if ( $( document.body ).hasClass( 'skin-citizen' ) && $( '#mw-content-text' ).length ) {
+    $( '#mw-content-text' ).append( nodes );
+  } else {
+    $( '#bodyContent' ).after( nodes );
+  }
 });
 
 if (mw.util.getParamValue('flowthread-page')) {
