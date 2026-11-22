@@ -182,7 +182,8 @@ $(document).ready(() => {
   // 这类皮肤把评论区放进内容容器内部；其余皮肤保持原有 DOM 结构，
   // 避免评论区被 .mw-body-content 的字号/列表样式影响。
   if ( $( document.body ).hasClass( 'skin-citizen' ) && $( '#mw-content-text' ).length ) {
-    $( '#mw-content-text' ).append( nodes );
+    var contentDiv = $( '<div></div>' ).append( nodes );
+    $( '.citizen-page-footer>.page-info' ).before( contentDiv );
   } else {
     $( '#bodyContent' ).after( nodes );
   }
